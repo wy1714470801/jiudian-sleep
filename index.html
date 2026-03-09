@@ -188,7 +188,28 @@ function render(c){
   const h=holding[c]||{};
   let html=`<span class="name">${d.name||c}</span>`;
 
-  if(d.price){
+  // 显示昨日净值和当日预估净值
+  if(d.nav){
+    html+=`<div style="display:flex;gap:20px;margin:8px 0;">
+      <div style="flex:1;">
+        <div style="color:#666;font-size:12px;">昨日净值</div>
+        <div style="font-size:16px;font-weight:600;margin-top:2px;">${d.nav.toFixed(4)}</div>
+      </div>`;
+    
+    if(d.price){
+      const diff=d.price-d.nav,pct=diff/d.nav*100;
+      html+=`<div style="flex:1;">
+        <div style="color:#666;font-size:12px;">当日预估</div>
+        <div style="font-size:16px;font-weight:600;margin-top:2px;" class="${diff>=0?'up':'down'}">${d.price.toFixed(4)}</div>
+      </div>`;
+    }
+    
+    html+=`</div>`;
+    
+    if(d.updateTime){
+      html+=`<small style="color:#999;display:block;margin-top:2px;">更新：${d.updateTime}</small>`;
+    }
+  }else if(d.price){
     html+=`<div>当日预估净值：<strong>${d.price.toFixed(4)}</strong></div>`;
     if(d.updateTime){
       html+=`<small style="color:#999;display:block;margin-top:2px;">更新：${d.updateTime}</small>`;
@@ -413,6 +434,73 @@ function fetchHistory(code){
         });
         
         html+='</tbody></table>';
+        
+        // 计算月度统计数据
+        let totalNav=0;
+        let totalProfitRate=0;
+        let totalChangeRate=0;
+        let changeCount=0;
+        
+        weekData.forEach((item,idx)=>{
+          let nav;
+          if(Array.isArray(item)){
+            nav=item[1];
+          }else if(typeof item==='object'){
+            nav=item.y||item.nav||item.value;
+          }
+          
+          if(typeof nav==='number'&&!isNaN(nav)){
+            totalNav+=nav;
+            
+            // 计算收益率（基于持仓成本）
+            if(hasCost&&h.cost>0){
+              const profitRate=(nav-h.cost)/h.cost*100;
+              totalProfitRate+=profitRate;
+            }
+            
+            // 计算涨跌幅
+            if(idx<weekData.length-1&&weekData[idx+1]){
+              let prevNav;
+              if(Array.isArray(weekData[idx+1])){
+                prevNav=weekData[idx+1][1];
+              }else if(typeof weekData[idx+1]==='object'){
+                prevNav=weekData[idx+1].y||weekData[idx+1].nav||weekData[idx+1].value;
+              }
+              
+              if(typeof prevNav==='number'&&!isNaN(prevNav)){
+                const changeRate=(nav-prevNav)/prevNav*100;
+                totalChangeRate+=changeRate;
+                changeCount++;
+              }
+            }
+          }
+        });
+        
+        const avgNav=(totalNav/validCount).toFixed(4);
+        const avgProfitRate=hasCost&&h.cost>0?(totalProfitRate/validCount).toFixed(2):'—';
+        
+        // 添加月度数据统计
+        html+=`<div style="margin-top:15px;padding:12px;background:#f0f9ff;border-radius:8px;border:1px solid #bfdbfe;">
+          <div style="font-weight:600;margin-bottom:8px;color:#1e40af;">📈 月度数据统计</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              <span style="color:#666;font-size:13px;">平均净值</span>
+              <div style="font-weight:600;font-size:15px;margin-top:2px;">${avgNav}</div>
+            </div>
+            <div>
+              <span style="color:#666;font-size:13px;">平均收益率</span>
+              <div style="font-weight:600;font-size:15px;margin-top:2px;" class="${hasCost&&parseFloat(avgProfitRate)>=0?'up':'down'}">${avgProfitRate}${avgProfitRate!=='—'?'%':''}</div>
+            </div>
+            <div>
+              <span style="color:#666;font-size:13px;">累计涨跌幅</span>
+              <div style="font-weight:600;font-size:15px;margin-top:2px;" class="${totalChangeRate>=0?'up':'down'}">${totalChangeRate.toFixed(2)}%</div>
+            </div>
+            <div>
+              <span style="color:#666;font-size:13px;">数据天数</span>
+              <div style="font-weight:600;font-size:15px;margin-top:2px;">${validCount}天</div>
+            </div>
+          </div>
+        </div>`;
         
         if(hasCost&&validCount>0){
           const latestNav=Array.isArray(weekData[0])?weekData[0][1]:(weekData[0].y||weekData[0].nav||weekData[0].value);
