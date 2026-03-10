@@ -34,7 +34,9 @@ small{color:#666}
 .history-table th,.history-table td{padding:12px 8px;text-align:left;border-bottom:1px solid #eee}
 .history-table th{background:#f9fafb;font-weight:600;position:sticky;top:0;z-index:1}
 .history-table td:last-child{padding-right:15px}
-#historyChart,#profitChart{width:100%;height:420px;border:1px solid #eee;border-radius:8px;margin-bottom:15px}
+#historyChart,#profitChart{width:100%;height:420px;border:1px solid #eee;border-radius:8px;margin-bottom:15px;cursor:crosshair}
+.chart-tooltip{position:absolute;background:rgba(0,0,0,0.85);color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;pointer-events:none;display:none;z-index:1001;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+.chart-tooltip-title{font-weight:600;margin-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:4px}
 .chart-title{font-weight:600;color:#111;margin:15px 0 10px 0;font-size:14px}
 @media(max-width:1024px){.history-container{flex-direction:column}.history-table-wrapper,.history-chart-wrapper{min-width:100%}}
 </style>
@@ -61,9 +63,15 @@ small{color:#666}
 </div>
 <div class="history-chart-wrapper">
 <div class="chart-title">📈 净值走势图</div>
+<div style="position:relative;">
 <canvas id="historyChart"></canvas>
+<div id="chartTooltip" class="chart-tooltip"></div>
+</div>
 <div class="chart-title">💰 持仓收益走势图</div>
+<div style="position:relative;">
 <canvas id="profitChart"></canvas>
+<div id="profitTooltip" class="chart-tooltip"></div>
+</div>
 </div>
 </div>
 </div>
@@ -112,11 +120,24 @@ window.jsonpgz=function(d){
   fundPool[c]=fundPool[c]||{};
   fundPool[c].name=d.name;
   if(d.dwjz) fundPool[c].nav=parseFloat(d.dwjz);
+  
+  // 优化：同时保存估算净值和实时净值
   if(d.gsz){
     fundPool[c].price=parseFloat(d.gsz);
     fundPool[c].updateTime=d.gztime;
     fundPool[c].source="天天基金（估算）";
+    fundPool[c].gszzl=d.gszzl; // 估算涨跌幅
   }
+  
+  // 如果有实时净值，优先使用（更准确）
+  if(d.jzrq&&d.jzrq===new Date().toISOString().split('T')[0].replace(/-/g,'')){
+    // 如果净值日期是今天，说明已经更新了实时净值
+    if(d.dwjz){
+      fundPool[c].price=parseFloat(d.dwjz);
+      fundPool[c].source="天天基金（实时）";
+    }
+  }
+  
   saveCache(c);
   render(c);
   finishTask();
@@ -198,16 +219,21 @@ function render(c){
     
     if(d.price){
       const diff=d.price-d.nav,pct=diff/d.nav*100;
+      const isEstimate=d.source&&d.source.includes('估算');
       html+=`<div style="flex:1;">
-        <div style="color:#666;font-size:12px;">当日预估</div>
-        <div style="font-size:16px;font-weight:600;margin-top:2px;" class="${diff>=0?'up':'down'}">${d.price.toFixed(4)}</div>
+        <div style="color:#666;font-size:12px;">当日${isEstimate?'预估':'净值'}</div>
+        <div style="font-size:16px;font-weight:600;margin-top:2px;" class="${diff>=0?'up':'down'}">
+          ${d.price.toFixed(4)}
+          ${isEstimate?'<span style="font-size:11px;margin-left:4px;">📊</span>':''}
+        </div>
       </div>`;
     }
     
     html+=`</div>`;
     
     if(d.updateTime){
-      html+=`<small style="color:#999;display:block;margin-top:2px;">更新：${d.updateTime}</small>`;
+      const sourceText=d.source&&d.source.includes('估算')?'（估算值，仅供参考）':'';
+      html+=`<small style="color:#999;display:block;margin-top:2px;">更新：${d.updateTime} ${sourceText}</small>`;
     }
   }else if(d.price){
     html+=`<div>当日预估净值：<strong>${d.price.toFixed(4)}</strong></div>`;
@@ -247,7 +273,7 @@ function render(c){
     份额 <input value="${h.shares||''}"
       oninput="saveOnly('${c}','shares',this.value)">
   </div>
-  <button class="history-btn" onclick="showHistory('${c}')">查看月度净值</button>
+  <button class="history-btn" onclick="showHistory('${c}')">查看两个月净值</button>
   <div class="src">数据来源：${d.source||"暂无（接口未返回）"}</div>
   <small>缓存时间：${d.time?new Date(d.time).toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}):"—"}</small>
   `;
@@ -335,7 +361,7 @@ function showHistory(code){
   const data=document.getElementById("historyData");
   
   const fundName=fundPool[code]?.name||code;
-  title.textContent=`${fundName} - 月度净值记录`;
+  title.textContent=`${fundName} - 两个月净值记录`;
   data.innerHTML='<div style="text-align:center;padding:20px;">加载中...</div>';
   modal.style.display="block";
   
@@ -364,7 +390,7 @@ function fetchHistory(code){
         
         const allData=[...window.Data_netWorthTrend];
         window.Data_netWorthTrend=savedData;
-        const weekData=allData.slice(-30).reverse();
+        const weekData=allData.slice(-60).reverse();
         const h=holding[code]||{};
         const hasCost=h.cost>0&&h.shares>0;
         
@@ -481,7 +507,7 @@ function fetchHistory(code){
         
         // 添加月度数据统计
         html+=`<div style="margin-top:15px;padding:12px;background:#f0f9ff;border-radius:8px;border:1px solid #bfdbfe;">
-          <div style="font-weight:600;margin-bottom:8px;color:#1e40af;">📈 月度数据统计</div>
+          <div style="font-weight:600;margin-bottom:8px;color:#1e40af;">📈 两个月数据统计</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div>
               <span style="color:#666;font-size:13px;">平均净值</span>
@@ -512,10 +538,10 @@ function fetchHistory(code){
             const profitClass=monthProfit>=0?'up':'down';
             
             html+=`<div style="margin-top:15px;padding:12px;background:#f9fafb;border-radius:8px;">
-              <div style="font-weight:600;margin-bottom:8px;">📊 月度持仓统计</div>
+              <div style="font-weight:600;margin-bottom:8px;">📊 两个月持仓统计</div>
               <div>持仓成本：${h.cost.toFixed(4)} × ${h.shares}份 = ${(h.cost*h.shares).toFixed(2)}元</div>
               <div>当前市值：${latestNav.toFixed(4)} × ${h.shares}份 = ${(latestNav*h.shares).toFixed(2)}元</div>
-              <div class="${profitClass}">月度收益：${monthProfit.toFixed(2)}元（${monthProfitRate}%）</div>
+              <div class="${profitClass}">两个月收益：${monthProfit.toFixed(2)}元（${monthProfitRate}%）</div>
               <div class="${(latestNav-h.cost)*h.shares>=0?'up':'down'}">总收益：${((latestNav-h.cost)*h.shares).toFixed(2)}元（${(((latestNav-h.cost)/h.cost)*100).toFixed(2)}%）</div>
             </div>`;
           }
