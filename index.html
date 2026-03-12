@@ -101,6 +101,8 @@ button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
   .theme-toggle{width:40px;height:40px}
   textarea{height:80px;padding:10px}
   .header-row h2{font-size:20px}
+  .history-table{font-size:14px}
+  .history-table th,.history-table td{padding:12px 8px}
 }
 
 @media (max-width: 480px) {
@@ -110,6 +112,8 @@ button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
   .fund-item{padding:12px}
   button{padding:12px;font-size:15px}
   .history-btn{padding:8px 12px;font-size:13px;margin:4px 2px}
+  .history-table{font-size:13px}
+  .history-table th,.history-table td{padding:10px 6px}
 }
 
 @media (min-width: 1200px) {
@@ -181,8 +185,8 @@ small{color:var(--text-muted)}
 .history-container{display:flex;gap:20px;margin-top:15px}
 .history-table-wrapper{flex:1.2;min-width:400px;max-height:60vh;overflow-y:auto;border-radius:8px;border:1px solid var(--border-color)}
 .history-chart-wrapper{flex:1;min-width:350px}
-.history-table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}
-.history-table th,.history-table td{padding:12px 8px;text-align:left;border-bottom:1px solid var(--border-color);transition:background 0.2s ease}
+.history-table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:15px}
+.history-table th,.history-table td{padding:14px 10px;text-align:left;border-bottom:1px solid var(--border-color);transition:background 0.2s ease}
 .history-table th{background:var(--table-header-bg);font-weight:600;position:sticky;top:0;z-index:1}
 .history-table tbody tr:hover{background:var(--bg-primary)}
 .history-table td:last-child{padding-right:15px}
@@ -281,6 +285,26 @@ small{color:var(--text-muted)}
 function isTradingTime(){
  const d=new Date(),t=d.getHours()*60+d.getMinutes();
  return t>=570&&t<=900;
+}
+
+function isMarketClosed(){
+ const now = new Date();
+ const hour = now.getHours();
+ const minute = now.getMinutes();
+ const time = hour * 60 + minute;
+ const dayOfWeek = now.getDay();
+ 
+ // 周末认为已收市
+ if(dayOfWeek === 0 || dayOfWeek === 6) {
+   return true;
+ }
+ 
+ // 工作日15:00后认为收市，但考虑到数据更新延迟，16:00后更确定
+ if(dayOfWeek >= 1 && dayOfWeek <= 5) {
+   return time >= 960; // 16:00后
+ }
+ 
+ return true;
 }
 
 let domMap={},queue=[],working=false,currentTask=null;
@@ -595,59 +619,62 @@ window.jsonpgz=function(d){
  // 初始化基金数据（如果还没有）
  if(!fundPool[c]) fundPool[c] = {};
  
- // 保存基金名称
+ // 保存基金名称和昨日净值
  if(d.name) fundPool[c].name = d.name;
  if(d.dwjz) fundPool[c].nav = parseFloat(d.dwjz);
  
- // 调试信息
- console.log(`[${c}] 🔄 天天基金接收数据:`, {
-   name: d.name,
-   gsz: d.gsz,
-   gszzl: d.gszzl,
-   dwjz: d.dwjz,
-   jzrq: d.jzrq,
-   gztime: d.gztime,
-   '估算涨跌幅类型': typeof d.gszzl,
-   '估算涨跌幅值': d.gszzl,
-   '估算涨跌幅是否为0': d.gszzl === 0 || d.gszzl === "0"
+ // 简单直接：检查净值日期
+ const today = new Date();
+ const todayStr = today.toISOString().split('T')[0].replace(/-/g,'');
+ 
+ console.log(`[${c}] 📅 简单检测:`, {
+   净值日期: d.jzrq,
+   今天: todayStr,
+   净值: d.dwjz,
+   是否今天: d.jzrq === todayStr
  });
  
- // 保存估算涨跌幅（这是天天基金的核心数据）
- if(d.gszzl !== undefined && d.gszzl !== null && d.gszzl !== '' && d.gszzl !== 0 && d.gszzl !== "0"){
-   fundPool[c].gszzl = parseFloat(d.gszzl);
-   console.log(`[${c}] ✅ 天天基金保存有效估算涨跌幅:`, fundPool[c].gszzl);
+ // 直接判断：如果净值日期是今天，就是当日实际净值
+ if(d.jzrq === todayStr && d.dwjz && parseFloat(d.dwjz) > 0) {
+   // 当日实际净值
+   fundPool[c].actualPrice = parseFloat(d.dwjz);
+   fundPool[c].actualDate = d.jzrq;
+   fundPool[c].actualSource = "当日实际净值";
+   fundPool[c].isToday = true;
+   fundPool[c].price = fundPool[c].actualPrice;
+   fundPool[c].source = fundPool[c].actualSource;
+   
+   console.log(`[${c}] ✅ 当日实际净值确认:`, fundPool[c].actualPrice);
  } else {
-   console.log(`[${c}] ⚠️ 天天基金估算涨跌幅无效:`, d.gszzl, '类型:', typeof d.gszzl);
- }
- 
- // 保存估算净值
- if(d.gsz && parseFloat(d.gsz) > 0){
-   fundPool[c].price = parseFloat(d.gsz);
-   fundPool[c].updateTime = d.gztime;
-   fundPool[c].source = "天天基金（估算）";
-   console.log(`[${c}] ✅ 天天基金保存估算净值:`, fundPool[c].price);
- }
- 
- // 如果有实时净值，优先使用（更准确）
- if(d.jzrq && d.jzrq === new Date().toISOString().split('T')[0].replace(/-/g,'')){
-   // 如果净值日期是今天，说明已经更新了实时净值
-   if(d.dwjz && parseFloat(d.dwjz) > 0){
-     fundPool[c].price = parseFloat(d.dwjz);
-     fundPool[c].source = "天天基金（实时）";
-     console.log(`[${c}] ✅ 天天基金使用实时净值:`, fundPool[c].price);
-     // 如果当天有估算值，计算偏差
-     if(fundPool[c].gszzl){
-       const estimateNav = fundPool[c].nav * (1 + parseFloat(fundPool[c].gszzl) / 100);
-       saveDeviation(c, estimateNav, fundPool[c].price, d.jzrq);
-     }
+   // 不是今天的净值，按估算处理
+   fundPool[c].isToday = false;
+   
+   // 保存估算涨跌幅
+   if(d.gszzl !== undefined && d.gszzl !== null && d.gszzl !== '' && d.gszzl !== 0 && d.gszzl !== "0"){
+     fundPool[c].gszzl = parseFloat(d.gszzl);
    }
+   
+   // 保存估算净值
+   if(d.gsz && parseFloat(d.gsz) > 0){
+     fundPool[c].estimatePrice = parseFloat(d.gsz);
+     fundPool[c].updateTime = d.gztime;
+     fundPool[c].source = "天天基金（估算）";
+     fundPool[c].price = fundPool[c].estimatePrice;
+   }
+   
+   console.log(`[${c}] ⚡ 估算数据:`, {
+     估算净值: fundPool[c].estimatePrice,
+     估算涨跌幅: fundPool[c].gszzl
+   });
  }
  
- console.log(`[${c}] 🎯 天天基金最终数据:`, {
+ console.log(`[${c}] 🎯 最终数据:`, {
    name: fundPool[c].name,
+   actualPrice: fundPool[c].actualPrice,
+   estimatePrice: fundPool[c].estimatePrice,
    price: fundPool[c].price,
    nav: fundPool[c].nav,
-   gszzl: fundPool[c].gszzl,
+   isToday: fundPool[c].isToday,
    source: fundPool[c].source
  });
  
@@ -659,8 +686,7 @@ window.jsonpgz=function(d){
  saveCache(c);
  render(c);
  
- // 不要立即完成任务，等待东方财富数据或超时
- console.log(`[${c}] 天天基金数据处理完成，等待东方财富数据...`);
+ console.log(`[${c}] 天天基金数据处理完成`);
 };
 
 /* 任务控制 */
@@ -679,7 +705,7 @@ function run(c,retryCount=0){
  working=true;
  loadCache(c);
 
- currentTask={code:c,finished:false,sources:[]};
+ currentTask={code:c,finished:false,sources:[],startTime:Date.now()};
 
  // 同时启动天天基金和东方财富数据获取
  console.log(`[${c}] 🚀 开始同时获取天天基金和东方财富数据`);
@@ -771,11 +797,15 @@ function run(c,retryCount=0){
    
    const hasData = fundPool[c] && (fundPool[c].price || fundPool[c].eastMoneyPrice || fundPool[c].gszzl);
    const sourcesCount = currentTask.sources.length;
+   const timeElapsed = Date.now() - currentTask.startTime;
    
-   // 如果已有数据或两个源都尝试过了，完成任务
-   if(hasData || sourcesCount >= 2) {
-     console.log(`[${c}] 任务完成检查: 有数据=${!!hasData}, 源数量=${sourcesCount}, 源=${currentTask.sources.join(',')}`);
-     finishTask();
+   // 如果已有数据或两个源都尝试过了，或者超时太久，完成任务
+   if(hasData || sourcesCount >= 2 || timeElapsed > requestTimeout * 2.5) {
+     console.log(`[${c}] 任务完成检查: 有数据=${!!hasData}, 源数量=${sourcesCount}, 耗时=${timeElapsed}ms, 源=${currentTask.sources.join(',')}`);
+     
+     // 如果没有获取到任何有用数据，标记为失败
+     const success = hasData;
+     finishTask(success);
    }
  }
  
@@ -783,9 +813,10 @@ function run(c,retryCount=0){
  setTimeout(() => {
    if(currentTask && !currentTask.finished) {
      console.log(`[${c}] 总体超时，强制完成任务`);
-     finishTask();
+     const hasData = fundPool[c] && (fundPool[c].price || fundPool[c].eastMoneyPrice || fundPool[c].gszzl);
+     finishTask(hasData);
    }
- }, requestTimeout * 2);
+ }, requestTimeout * 3);
 }
 
 /* 处理东方财富数据 */
@@ -928,24 +959,27 @@ function render(c){
    天天基金估算涨跌幅: d.gszzl,
    东方财富涨跌: d.eastMoneyChange,
    天天基金来源: d.source,
-   东方财富来源: d.eastMoneySource
+   东方财富来源: d.eastMoneySource,
+   实际净值: d.actualPrice,
+   实际净值来源: d.actualSource,
+   实际净值日期: d.actualDate,
+   市场状态: isMarketClosed() ? '已收市' : '交易中'
  });
  
- // 加载状态骨架屏
- if(!d.name && !d.price && !d.nav && !d.eastMoneyPrice && (d.gszzl === undefined || d.gszzl === null)){
-   console.log(`[${c}] 显示骨架屏`);
-   el.innerHTML=`
-   <div class="skeleton skeleton-line short"></div>
-   <div class="skeleton skeleton-line medium"></div>
-   <div class="skeleton skeleton-line"></div>
-   <div class="row">
-     <div class="skeleton skeleton-line" style="width:80px;height:24px;"></div>
-     <div class="skeleton skeleton-line" style="width:80px;height:24px;margin-left:8px;"></div>
-   </div>
-   `;
-   el.classList.add('loading');
+ // 检查是否有足够的数据来显示完整卡片
+ const hasUsefulData = (d.name && (d.price || d.eastMoneyPrice || d.nav || d.actualPrice)) || 
+                       (d.price || d.eastMoneyPrice || d.actualPrice) || 
+                       (d.nav && d.gszzl !== undefined && d.gszzl !== null);
+ 
+ // 如果没有有用的数据，隐藏卡片
+ if(!hasUsefulData){
+   console.log(`[${c}] 没有足够数据，隐藏卡片`);
+   el.style.display = 'none';
    return;
  }
+ 
+ // 确保卡片可见
+ el.style.display = 'block';
  
  el.classList.remove('loading');
  
@@ -967,7 +1001,7 @@ function render(c){
    html+=`
    <div style="background:rgba(139,92,246,0.08);border-radius:10px;padding:12px;margin-bottom:12px;">
      <div style="font-size:12px;opacity:0.7;margin-bottom:3px;color:#6b46c1;">昨日净值</div>
-     <div style="font-size:20px;font-weight:700;color:#374151;">${d.nav.toFixed(4)}</div>
+     <div style="font-size:26px;font-weight:700;color:#374151;">${d.nav.toFixed(4)}</div>
    </div>`;
  }
 
@@ -990,15 +1024,15 @@ function render(c){
          <span style="font-size:14px;margin-right:4px;">📊</span>
          <span style="font-size:11px;font-weight:600;">天天基金</span>
        </div>
-       <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:#1e40af;">${d.price.toFixed(4)}</div>`;
+       <div style="font-size:20px;font-weight:700;margin-bottom:8px;color:#1e40af;">${d.price.toFixed(4)}</div>`;
      
-     if(d.nav) {
+       if(d.nav) {
        html += `
-       <div style="display:flex;align-items:center;justify-content:space-between;">
-         <div style="font-size:12px;font-weight:600;color:${isUp?'#dc2626':'#16a34a'};">
+       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+         <div style="font-size:16px;font-weight:700;color:${isUp?'#dc2626':'#16a34a'};">
            ${isUp?'+':''}${diff.toFixed(4)}
          </div>
-         <div style="background:${isUp?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};color:${isUp?'#dc2626':'#16a34a'};padding:2px 6px;border-radius:6px;font-size:10px;font-weight:600;">
+         <div style="background:${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:16px;font-weight:700;min-width:80px;text-align:center;">
            ${isUp?'+':''}${pct.toFixed(2)}%
          </div>
        </div>`;
@@ -1033,21 +1067,21 @@ function render(c){
          <span style="font-size:14px;margin-right:4px;">🏢</span>
          <span style="font-size:11px;font-weight:600;">东方财富</span>
        </div>
-       <div style="font-size:16px;font-weight:700;margin-bottom:6px;color:#92400e;">${d.eastMoneyPrice.toFixed(4)}</div>`;
+       <div style="font-size:20px;font-weight:700;margin-bottom:8px;color:#92400e;">${d.eastMoneyPrice.toFixed(4)}</div>`;
      
      if(d.eastMoneyChange) {
        html += `
-       <div style="display:flex;align-items:center;justify-content:space-between;">
-         <div style="font-size:12px;font-weight:600;color:${isEmUp?'#dc2626':'#16a34a'};">
+       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+         <div style="font-size:16px;font-weight:700;color:${isEmUp?'#dc2626':'#16a34a'};">
            ${isEmUp?'+':''}${emDiff.toFixed(4)}
          </div>
-         <div style="background:${isEmUp?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};color:${isEmUp?'#dc2626':'#16a34a'};padding:2px 6px;border-radius:6px;font-size:10px;font-weight:600;">
+         <div style="background:${isEmUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isEmUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:16px;font-weight:700;min-width:80px;text-align:center;">
            ${isEmUp?'+':''}${emPct.toFixed(2)}%
          </div>
        </div>`;
        
        if(d.eastMoneyChange.updateTime) {
-         html += `<div style="font-size:9px;opacity:0.7;margin-top:6px;">${d.eastMoneyChange.updateTime}</div>`;
+         html += `<div style="font-size:11px;opacity:0.7;margin-top:8px;">${d.eastMoneyChange.updateTime}</div>`;
        }
      }
      
@@ -1067,8 +1101,8 @@ function render(c){
    html += `</div>`;
  }
 
- // 天天基金实时估算卡片（如果有估算涨跌幅）
- if(d.gszzl !== undefined && d.gszzl !== null && !isNaN(d.gszzl) && d.gszzl !== 0 && d.nav){
+ // 天天基金实时估算卡片（只有在没有实际净值时才显示）
+ if(!d.actualPrice && d.gszzl !== undefined && d.gszzl !== null && !isNaN(d.gszzl) && d.gszzl !== 0 && d.nav){
    const estimatePct=parseFloat(d.gszzl);
    const estimatePrice=d.nav*(1+estimatePct/100);
    const diff=estimatePrice-d.nav;
@@ -1080,18 +1114,18 @@ function render(c){
        <span style="font-size:14px;margin-right:4px;">⚡</span>
        <span style="font-size:12px;font-weight:600;">天天基金实时估算</span>
      </div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center;">
        <div>
-         <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">预估净值</div>
-         <div style="font-size:14px;font-weight:700;color:#166534;">${estimatePrice.toFixed(4)}</div>
+         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">预估净值</div>
+         <div style="font-size:18px;font-weight:700;color:#166534;">${estimatePrice.toFixed(4)}</div>
        </div>
        <div>
-         <div style="font-size:10px;opacity:0.7;margin-bottom:2px;">预估涨跌</div>
-         <div style="display:flex;align-items:center;gap:4px;">
-           <span style="font-size:11px;font-weight:600;color:${isUp?'#dc2626':'#16a34a'};">
+         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">预估涨跌</div>
+         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+           <span style="font-size:18px;font-weight:700;color:${isUp?'#dc2626':'#16a34a'};min-width:80px;">
              ${isUp?'+':''}${diff.toFixed(4)}
            </span>
-           <span style="background:${isUp?'#fef2f2':'#f0fdf4'};color:${isUp?'#dc2626':'#16a34a'};padding:1px 4px;border-radius:4px;font-size:9px;font-weight:600;">
+           <span style="background:${isUp?'#fef2f2':'#f0fdf4'};color:${isUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:18px;font-weight:700;text-align:center;min-width:80px;">
              ${isUp?'+':''}${estimatePct.toFixed(2)}%
            </span>
          </div>
@@ -1103,22 +1137,97 @@ function render(c){
    if(h.shares > 0){
      const dayPL=diff*h.shares;
      html+=`
-     <div style="background:${dayPL>=0?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)'};border:1px solid ${dayPL>=0?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'};border-radius:6px;padding:8px;margin-bottom:12px;">
-       <div style="font-size:11px;color:${dayPL>=0?'#059669':'#dc2626'};font-weight:600;">
+     <div style="background:${dayPL>=0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};border:2px solid ${dayPL>=0?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;padding:16px;margin-bottom:12px;">
+       <div style="font-size:16px;color:${dayPL>=0?'#059669':'#dc2626'};font-weight:700;text-align:center;">
          当日预估盈亏：${dayPL>=0?'+':''}${dayPL.toFixed(2)} 元
        </div>
      </div>`;
    }
  }
 
+ // 当日实际净值卡片（优先显示）
+ if(d.actualPrice && d.nav){
+   const actualDiff = d.actualPrice - d.nav;
+   const actualPct = (actualDiff / d.nav) * 100;
+   const isActualUp = actualDiff >= 0;
+   
+   // 格式化净值日期
+   const dateStr = d.actualDate ? d.actualDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '';
+   
+   // 判断是否为当日净值
+   const isToday = d.isToday === true;
+   const cardTitle = isToday ? '当日实际净值' : `实际净值 (${dateStr})`;
+   const cardIcon = isToday ? '🎯' : '🏁';
+   const cardBg = isToday ? 
+     'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)' : 
+     'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+   const cardColor = isToday ? '#166534' : '#92400e';
+   
+   html+=`
+   <div style="background:${cardBg};border-radius:10px;padding:12px;margin-bottom:12px;color:${cardColor};box-shadow:0 1px 4px rgba(245,158,11,0.08);">
+     <div style="display:flex;align-items:center;margin-bottom:8px;">
+       <span style="font-size:14px;margin-right:4px;">${cardIcon}</span>
+       <span style="font-size:12px;font-weight:600;">${cardTitle}</span>
+       ${isToday ? '<span style="background:rgba(22,101,52,0.2);color:#166534;padding:2px 6px;border-radius:12px;font-size:10px;margin-left:8px;">最新</span>' : ''}
+     </div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center;">
+       <div>
+         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">净值</div>
+         <div style="font-size:18px;font-weight:700;color:${cardColor};">${d.actualPrice.toFixed(4)}</div>
+       </div>
+       <div>
+         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">涨跌</div>
+         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+           <span style="font-size:18px;font-weight:700;color:${isActualUp?'#dc2626':'#16a34a'};min-width:80px;">
+             ${isActualUp?'+':''}${actualDiff.toFixed(4)}
+           </span>
+           <span style="background:${isActualUp?'#fef2f2':'#f0fdf4'};color:${isActualUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:18px;font-weight:700;text-align:center;min-width:80px;">
+             ${isActualUp?'+':''}${actualPct.toFixed(2)}%
+           </span>
+         </div>
+       </div>
+     </div>
+   </div>`;
+   
+   // 计算当日实际盈亏
+   if(h.shares > 0){
+     const actualDayPL = actualDiff * h.shares;
+     const plTitle = isToday ? '当日实际盈亏' : '实际盈亏';
+     html+=`
+     <div style="background:${actualDayPL>=0?'rgba(245,158,11,0.1)':'rgba(239,68,68,0.1)'};border:2px solid ${actualDayPL>=0?'rgba(245,158,11,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;padding:16px;margin-bottom:12px;">
+       <div style="font-size:16px;color:${actualDayPL>=0?'#d97706':'#dc2626'};font-weight:700;text-align:center;">
+         ${plTitle}：${actualDayPL>=0?'+':''}${actualDayPL.toFixed(2)} 元
+       </div>
+     </div>`;
+   }
+ } else if(d.nav) {
+   // 如果没有当日实际净值，显示"尚未更新"提示
+   const today = new Date();
+   const todayStr = today.toISOString().split('T')[0].replace(/-/g,'');
+   
+   html+=`
+   <div style="background:rgba(156,163,175,0.1);border:1px dashed rgba(156,163,175,0.3);border-radius:10px;padding:16px;margin-bottom:12px;text-align:center;">
+     <div style="display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
+       <span style="font-size:14px;margin-right:4px;">⏳</span>
+       <span style="font-size:12px;font-weight:600;">当日净值状态</span>
+     </div>
+     <div style="font-size:14px;color:var(--text-muted);font-weight:600;">
+       📅 当日净值尚未更新
+     </div>
+     <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+       ${d.gszzl !== undefined && d.gszzl !== null ? '当前显示实时估算数据' : '暂无估算数据'}
+     </div>
+   </div>`;
+ }
+
  html += `</div>`; // 结束主卡片
 
  // 持仓收益卡片
- const currentPrice = d.price || d.eastMoneyPrice;
+ const currentPrice = d.actualPrice || d.price || d.eastMoneyPrice;
+ const priceSource = d.actualPrice ? '实际净值' : (d.price ? '天天基金' : '东方财富');
  if(currentPrice && h.cost > 0 && h.shares > 0){
    const total = (currentPrice - h.cost) * h.shares;
    const pct = (currentPrice - h.cost) / h.cost * 100;
-   const dataSource = d.price ? '天天基金' : '东方财富';
    const isProfit = total >= 0;
    
    html+=`
@@ -1129,17 +1238,17 @@ function render(c){
          <span style="font-size:14px;font-weight:600;">持仓收益</span>
        </div>
        <div style="background:${isProfit?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:8px;font-size:9px;">
-         基于${dataSource}
+         基于${priceSource}
        </div>
      </div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
        <div>
-         <div style="font-size:11px;opacity:0.7;margin-bottom:2px;">收益金额</div>
-         <div style="font-size:18px;font-weight:700;">${isProfit?'+':''}${total.toFixed(2)}</div>
+         <div style="font-size:13px;opacity:0.7;margin-bottom:4px;">收益金额</div>
+         <div style="font-size:22px;font-weight:700;">${isProfit?'+':''}${total.toFixed(2)}</div>
        </div>
        <div>
-         <div style="font-size:11px;opacity:0.7;margin-bottom:2px;">收益率</div>
-         <div style="font-size:18px;font-weight:700;">${isProfit?'+':''}${pct.toFixed(2)}%</div>
+         <div style="font-size:13px;opacity:0.7;margin-bottom:4px;">收益率</div>
+         <div style="font-size:22px;font-weight:700;">${isProfit?'+':''}${pct.toFixed(2)}%</div>
        </div>
      </div>
    </div>`;
@@ -1175,9 +1284,10 @@ function render(c){
    </div>
    
    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color);font-size:10px;color:var(--text-muted);text-align:center;">
-     数据来源：${[d.source, d.eastMoneySource].filter(Boolean).join(' + ') || "暂无"}<br>
+     数据来源：${[d.source, d.eastMoneySource, d.actualSource].filter(Boolean).join(' + ') || "暂无"}<br>
      ${d.cacheTime ? `缓存时间：${d.cacheTime}` : (d.time ? `缓存时间：${new Date(d.time).toLocaleString("zh-CN",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"})}` : "缓存时间：—")}<br>
      ${d.updateTime ? `数据更新：${d.updateTime}` : ""}
+     ${d.actualPrice ? `<br>实际净值日期：${d.actualDate ? d.actualDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : ''}` : ""}
    </div>
  </div>
  `;
@@ -1241,6 +1351,7 @@ function start(){
  const list=document.getElementById("list");
  // 强制清空并重置
  list.innerHTML="";
+ hideNoDataMessage(); // 隐藏之前的无数据提示
  list.style.display = 'none';
  list.offsetHeight; // 强制重排
  list.style.display = '';
@@ -1289,24 +1400,110 @@ function onTaskComplete(success=true){
      
      updateRefreshStatus(`✅ 查询完成 - ${new Date().toLocaleTimeString()}`);
      
-     // 优化网格布局
+     // 清理失败的卡片并优化布局
+     cleanupFailedCards();
      optimizeGridLayout();
    },500);
+ }
+}
+
+/* 清理失败的卡片 */
+function cleanupFailedCards(){
+ const grid = document.getElementById('list');
+ const items = grid.querySelectorAll('.fund-item');
+ let visibleCount = 0;
+ 
+ items.forEach(item => {
+   // 如果卡片没有显示有用内容，就隐藏它
+   if(item.style.display === 'none' || item.classList.contains('loading')) {
+     item.style.display = 'none';
+     console.log('隐藏失败的卡片:', item.id);
+   } else {
+     visibleCount++;
+   }
+ });
+ 
+ // 如果没有任何可见的卡片，显示友好的提示
+ if(visibleCount === 0) {
+   showNoDataMessage();
+ } else {
+   hideNoDataMessage();
+ }
+}
+
+/* 显示无数据提示 */
+function showNoDataMessage(){
+ const grid = document.getElementById('list');
+ let messageEl = document.getElementById('noDataMessage');
+ 
+ if(!messageEl) {
+   messageEl = document.createElement('div');
+   messageEl.id = 'noDataMessage';
+   messageEl.style.cssText = `
+     background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+     border-radius: 16px;
+     padding: 40px 20px;
+     text-align: center;
+     color: #6b7280;
+     margin: 20px auto;
+     max-width: 400px;
+     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+   `;
+   
+   messageEl.innerHTML = `
+     <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+     <h3 style="margin: 0 0 12px 0; color: #374151; font-size: 18px;">暂无基金数据</h3>
+     <p style="margin: 0; font-size: 14px; line-height: 1.5;">
+       请检查基金代码是否正确，或稍后重试。<br>
+       网络连接问题可能导致数据获取失败。
+     </p>
+     <button onclick="location.reload()" style="
+       margin-top: 20px;
+       padding: 10px 20px;
+       background: #4f46e5;
+       color: white;
+       border: none;
+       border-radius: 8px;
+       cursor: pointer;
+       font-size: 14px;
+     ">🔄 重新加载</button>
+   `;
+   
+   grid.appendChild(messageEl);
+ }
+ 
+ messageEl.style.display = 'block';
+ grid.style.display = 'block';
+}
+
+/* 隐藏无数据提示 */
+function hideNoDataMessage(){
+ const messageEl = document.getElementById('noDataMessage');
+ if(messageEl) {
+   messageEl.style.display = 'none';
  }
 }
 
 /* 优化网格布局 */
 function optimizeGridLayout(){
  const grid = document.getElementById('list');
- const items = grid.querySelectorAll('.fund-item');
- const itemCount = items.length;
+ const allItems = grid.querySelectorAll('.fund-item');
+ const visibleItems = Array.from(allItems).filter(item => item.style.display !== 'none');
+ const itemCount = visibleItems.length;
  
- if(itemCount === 0) return;
+ console.log(`布局优化: 总卡片${allItems.length}个，可见${itemCount}个`);
+ 
+ if(itemCount === 0) {
+   grid.style.display = 'none';
+   return;
+ }
+ 
+ grid.style.display = 'grid';
  
  // 移除之前的布局类
  grid.classList.remove('single-item', 'two-items', 'optimal-layout');
  
- // 根据项目数量调整布局
+ // 根据可见项目数量调整布局
  if(itemCount === 1) {
    grid.classList.add('single-item');
  } else if(itemCount === 2) {
