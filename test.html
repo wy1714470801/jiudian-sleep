@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基金查询测试</title>
+</head>
+<body>
+<h1>基金查询功能测试</h1>
+<p>请在主页面 index.html 中测试以下功能：</p>
+
+<h2>✅ 已修复的问题</h2>
+<ul>
+<li><strong>估算当日涨跌显示为 0.0000 的问题</strong> - 已修复</li>
+<li><strong>数据源区分显示</strong> - 天天基金和东方财富数据现在分开显示</li>
+</ul>
+
+<h2>🔧 新增功能</h2>
+<ul>
+<li><strong>双数据源支持</strong>：同时获取天天基金和东方财富的数据</li>
+<li><strong>数据源对比</strong>：显示两个数据源的净值差异</li>
+<li><strong>实时估算</strong>：天天基金的实时估算涨跌幅</li>
+<li><strong>调试工具</strong>：新增调试按钮帮助排查问题</li>
+</ul>
+
+<h2>🎯 测试步骤</h2>
+<ol>
+<li>打开 index.html</li>
+<li>输入基金代码（如：161725, 000001）</li>
+<li>点击"查询"按钮</li>
+<li>观察显示结果：
+   <ul>
+   <li>应该看到天天基金和东方财富的数据分别显示</li>
+   <li>天天基金应该显示实时估算涨跌幅（不再是0.0000）</li>
+   <li>东方财富显示历史净值数据</li>
+   <li>两个数据源的差异对比</li>
+   </ul>
+</li>
+<li>使用调试按钮：
+   <ul>
+   <li>🔄 强制刷新：清除内存数据重新获取</li>
+   <li>🔍 调试状态：查看DOM和数据状态</li>
+   <li>🗑️ 清除缓存：清空所有本地缓存</li>
+   <li>🔬 测试双源：检查双数据源状态</li>
+   </ul>
+</li>
+</ol>
+
+<h2>📊 预期结果</h2>
+<ul>
+<li>天天基金数据显示实时估算涨跌幅（非零值）</li>
+<li>东方财富数据显示历史净值和涨跌幅</li>
+<li>两个数据源清晰区分，用不同颜色边框标识</li>
+<li>数据源对比显示净值和涨跌幅差异</li>
+<li>持仓收益基于可用的最佳数据源计算</li>
+</ul>
+
+<p><a href="index.html">返回主页面测试</a></p>
+</body>
+</html>
+</text>
+</invoke>

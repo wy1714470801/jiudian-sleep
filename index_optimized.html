@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="基金查询">
+<link rel="manifest" href="manifest.json">
+<title>基金净值查询</title>
+<style>
+/* 亮色模式变量 */
+:root {
+  --bg-primary: #f6f7fb;
+  --bg-secondary: #fff;
+  --text-primary: #111;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --border-color: #eee;
+  --card-shadow: 0 8px 24px rgba(0,0,0,.08);
+  --up-color: #ef4444;
+  --down-color: #16a34a;
+  --primary-color: #4f46e5;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --table-header-bg: #f9fafb;
+  --chart-grid-color: #f0f0f0;
+  --skeleton-bg: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+}
+
+/* 深色模式变量 */
+[data-theme="dark"] {
+  --bg-primary: #121212;
+  --bg-secondary: #1e1e1e;
+  --text-primary: #fff;
+  --text-secondary: #aaa;
+  --text-muted: #777;
+  --border-color: #333;
+  --card-shadow: 0 8px 24px rgba(0,0,0,.3);
+  --up-color: #f87171;
+  --down-color: #34d399;
+  --primary-color: #818cf8;
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --table-header-bg: #2d2d2d;
+  --chart-grid-color: #333;
+  --skeleton-bg: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+}
+
+body{background:var(--bg-primary);padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text-primary);transition:background 0.3s, color 0.3s;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.card{max-width:520px;margin:auto;background:var(--bg-secondary);border-radius:14px;padding:18px;box-shadow:var(--card-shadow);transition:background 0.3s ease}
+.header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.theme-toggle{width:44px;height:44px;border-radius:50%;border:none;background:var(--bg-primary);color:var(--text-primary);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background-color 0.2s ease;touch-action:manipulation}
+.theme-toggle:hover{background-color:var(--border-color)}
+.theme-toggle:active{transform:scale(0.95)}
+textarea{width:100%;height:90px;padding:12px;font-size:16px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);resize:vertical;transition:border-color 0.2s ease;touch-action:manipulation}
+textarea:focus{border-color:var(--primary-color);box-shadow:0 0 0 3px rgba(79,70,229,0.1)}
+button{width:100%;padding:16px;margin-top:10px;font-size:18px;background:var(--primary-color);color:#fff;border:none;border-radius:12px;cursor:pointer;transition:background-color 0.2s ease;touch-action:manipulation;min-height:48px}
+button:hover{background-color:var(--success-color)}
+button:active{transform:scale(0.98)}
+button:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+
+/* 进度条样式 */
+.progress-container{margin:15px 0;opacity:0;transition:opacity 0.3s ease}
+.progress-container.show{opacity:1}
+.progress-bar{width:100%;height:6px;background:var(--border-color);border-radius:3px;overflow:hidden;position:relative}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--primary-color),var(--success-color));border-radius:3px;transition:width 0.5s ease;position:relative}
+.progress-text{text-align:center;margin-top:8px;font-size:13px;color:var(--text-secondary)}
+
+/* 下拉刷新样式 */
+.pull-refresh{position:relative;overflow:hidden}
+.pull-refresh-indicator{position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--primary-color);transition:top 0.3s ease}
+.pull-refresh-indicator.pulling{top:10px}
+.pull-refresh-indicator.refreshing{animation:spin 1s linear infinite}
+@keyframes spin{from{transform:translateX(-50%) rotate(0deg)}to{transform:translateX(-50%) rotate(360deg)}}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  body{padding:12px}
+  .card{padding:16px;border-radius:12px}
+  button{padding:14px;font-size:16px;min-height:44px}
+  .theme-toggle{width:40px;height:40px}
+  textarea{height:80px;padding:10px}
+  .header-row h2{font-size:20px}
+}
+
+@media (max-width: 480px) {
+  body{padding:8px}
+  .card{padding:12px}
+  button{padding:12px;font-size:15px}
+  .history-btn{padding:8px 12px;font-size:13px;margin:4px 2px}
+}
+
+/* 横屏适配 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .card{max-width:90vw;padding:12px}
+  .header-row{margin-bottom:12px}
+  textarea{height:60px}
+  .modal-content{margin:2% auto;max-height:95vh}
+}
+.item{border-bottom:1px solid var(--border-color);padding:12px 0;line-height:1.6;position:relative;transition:all 0.2s ease;opacity:1;transform:translateY(0)}
+.item.loading::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:var(--bg-secondary);opacity:0.7;z-index:10}
+.skeleton{background:var(--skeleton-bg);background-size:200% 100%;animation:skeleton-loading 2s infinite;border-radius:4px}
+@keyframes skeleton-loading{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skeleton-line{height:16px;border-radius:4px;margin:8px 0}
+.skeleton-line.short{width:60%}
+.skeleton-line.medium{width:80%}
+input{width:120px;padding:8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);transition:border-color 0.2s ease;min-height:36px;touch-action:manipulation}
+input:focus{border-color:var(--primary-color);box-shadow:0 0 0 2px rgba(79,70,229,0.1)}
+.up{color:var(--up-color)}
+.down{color:var(--down-color)}
+small{color:var(--text-muted)}
+.name{display:block;color:var(--text-primary);font-weight:600;margin-bottom:6px;transition:color 0.2s ease}
+.row{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.src{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.note{font-size:13px;color:var(--text-muted)}
+.history-btn{display:inline-block;padding:8px 14px;margin:6px 4px 6px 0;font-size:14px;background:var(--success-color);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:background-color 0.2s ease;touch-action:manipulation;min-height:36px;white-space:nowrap}
+.history-btn:hover{background-color:var(--primary-color)}
+.history-btn:active{transform:none}
+.deviation-info{font-size:12px;color:var(--warning-color);margin-top:4px}
+</style>
+</head>
+
+<body>
+<div class="card pull-refresh" id="mainCard">
+<div class="pull-refresh-indicator" id="pullIndicator">🔄</div>
+<div class="header-row">
+  <h2>📈 基金净值查询</h2>
+  <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">🌙</button>
+</div>
+<textarea id="codes" placeholder="输入基金代码（换行）"></textarea>
+<button onclick="start()" id="queryBtn">查询</button>
+
+<!-- 进度条 -->
+<div class="progress-container" id="progressContainer">
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="progress-text" id="progressText">准备查询...</div>
+</div>
+
+<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+  <button onclick="exportData('json')" style="flex:1;padding:12px;font-size:14px;background:#10b981;min-width:120px;">导出 JSON</button>
+  <button onclick="exportData('excel')" style="flex:1;padding:12px;font-size:14px;background:#f59e0b;min-width:120px;">导出 Excel</button>
+  <label for="importFile" style="flex:1;padding:12px;font-size:14px;background:#4f46e5;color:#fff;border-radius:12px;text-align:center;cursor:pointer;min-width:120px;display:flex;align-items:center;justify-content:center;">导入数据</label>
+  <input type="file" id="importFile" accept=".json,.xlsx,.xls" style="display:none;" onchange="importData(event)">
+</div>
+<div style="margin-top:10px;font-size:13px;color:var(--text-secondary);">
+ <span id="refreshStatus">💡 交易时间内每60秒自动刷新</span>
+</div>
+<div id="list"></div>
+</div>
+
+<script>
+// 这里会包含所有的JavaScript代码，但为了简洁，我先创建基础版本
+console.log("基金查询工具已加载 - 优化版本");
+</script>
+</body>
+</html>
+</text>
+</invoke>
