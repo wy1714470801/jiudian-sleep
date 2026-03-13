@@ -49,7 +49,7 @@
 
 body{background:var(--bg-primary);padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text-primary);transition:background 0.3s, color 0.3s;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .card{max-width:520px;margin:auto;background:var(--bg-secondary);border-radius:14px;padding:18px;box-shadow:var(--card-shadow);transition:background 0.3s ease}
-.fund-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:16px;margin-top:20px;justify-items:stretch}
+.fund-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:48px;margin-top:20px;justify-items:stretch}
 .fund-item{background:var(--bg-secondary);border-radius:14px;padding:16px;box-shadow:var(--card-shadow);transition:background 0.3s ease;width:100%}
 
 /* 布局优化类 */
@@ -195,7 +195,7 @@ small{color:var(--text-muted)}
 .chart-tooltip{position:absolute;background:rgba(0,0,0,0.9);color:#fff;padding:10px 14px;border-radius:8px;font-size:12px;pointer-events:none;display:none;z-index:1001;box-shadow:0 4px 12px rgba(0,0,0,0.3);backdrop-filter:blur(10px)}
 .chart-tooltip-title{font-weight:600;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:4px}
 .chart-title{font-weight:600;color:var(--text-primary);margin:15px 0 10px 0;font-size:16px;display:flex;align-items:center;gap:8px}
-.chart-controls{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.chart-controls{display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap}
 .chart-control-btn{padding:6px 12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s ease;touch-action:manipulation;color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,0.05)}
 .chart-control-btn:hover{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
 .chart-control-btn.active{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
@@ -240,6 +240,18 @@ small{color:var(--text-muted)}
 <div class="modal-content">
 <span class="close" onclick="closeHistory()">&times;</span>
 <h3 id="historyTitle">历史净值</h3>
+
+<!-- 涨跌幅统计按钮 -->
+<div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+  <button class="chart-control-btn" onclick="calculatePeriodChange(1)" style="background:var(--primary-color);color:#fff;border-color:var(--primary-color);">
+    📊 本周涨跌幅
+  </button>
+  <button class="chart-control-btn" onclick="calculatePeriodChange(2)" style="background:var(--success-color);color:#fff;border-color:var(--success-color);">
+    📊 近两周涨跌幅
+  </button>
+  <div id="periodChangeResult" style="flex:1;min-width:200px;padding:8px 12px;background:var(--bg-primary);border-radius:6px;font-size:13px;font-weight:600;display:none;align-items:center;justify-content:center;"></div>
+</div>
+
 <div class="history-container">
 <div class="history-table-wrapper">
 <div id="historyData"></div>
@@ -248,6 +260,8 @@ small{color:var(--text-muted)}
 <div class="chart-title">📈 净值走势图</div>
 <div class="chart-controls">
   <button class="chart-control-btn active" onclick="setChartPeriod('all')">全部</button>
+  <button class="chart-control-btn" onclick="setChartPeriod('7')">7天</button>
+  <button class="chart-control-btn" onclick="setChartPeriod('14')">14天</button>
   <button class="chart-control-btn" onclick="setChartPeriod('30')">30天</button>
   <button class="chart-control-btn" onclick="setChartPeriod('60')">60天</button>
   <button class="chart-control-btn" onclick="resetChartZoom()">重置缩放</button>
@@ -999,11 +1013,30 @@ function render(c){
  // 显示昨日净值
  if(d.nav){
    html+=`
-   <div style="background:rgba(139,92,246,0.08);border-radius:10px;padding:12px;margin-bottom:12px;">
-     <div style="font-size:12px;opacity:0.7;margin-bottom:3px;color:#6b46c1;">昨日净值</div>
-     <div style="font-size:26px;font-weight:700;color:#374151;">${d.nav.toFixed(4)}</div>
+   <div style="background:rgba(139,92,246,0.08);border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(139,92,246,0.1);">
+     <div style="font-size:13px;opacity:0.7;margin-bottom:6px;color:#6b46c1;font-weight:500;">昨日净值</div>
+     <div style="font-size:32px;font-weight:800;color:#374151;letter-spacing:0.5px;">${d.nav.toFixed(4)}</div>
    </div>`;
  }
+
+ // 当日净值状态卡片
+ const hasActualToday = d.actualPrice && d.isToday === true;
+ const statusBg = hasActualToday ? 
+   'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)' : 
+   'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)';
+ const statusIcon = hasActualToday ? '✅' : '🕐';
+ const statusTitle = hasActualToday ? '当日净值已更新' : '当日净值尚未更新';
+ const statusDesc = hasActualToday ? '已获取最新净值数据' : '当前显示实时估算数据';
+ const statusColor = hasActualToday ? '#166534' : '#1e40af';
+ 
+ html+=`
+ <div style="background:${statusBg};border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px ${hasActualToday?'rgba(34,197,94,0.15)':'rgba(59,130,246,0.15)'};">
+   <div style="display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;">
+     <div style="font-size:24px;margin-bottom:8px;">${statusIcon}</div>
+     <div style="font-size:16px;font-weight:700;color:${statusColor};margin-bottom:4px;">${statusTitle}</div>
+     <div style="font-size:12px;opacity:0.7;color:${statusColor};">${statusDesc}</div>
+   </div>
+ </div>`;
 
  // 数据源对比卡片
  const hasTianTian = d.price && d.source;
@@ -1019,20 +1052,20 @@ function render(c){
      const isUp = diff >= 0;
      
      html += `
-     <div style="background:linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);border-radius:10px;padding:12px;color:#1e40af;box-shadow:0 1px 4px rgba(59,130,246,0.08);">
-       <div style="display:flex;align-items:center;margin-bottom:8px;">
-         <span style="font-size:14px;margin-right:4px;">📊</span>
-         <span style="font-size:11px;font-weight:600;">天天基金</span>
+     <div style="background:linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);border-radius:10px;padding:16px;color:#1e40af;box-shadow:0 4px 12px rgba(59,130,246,0.15);">
+       <div style="display:flex;align-items:center;margin-bottom:12px;">
+         <span style="font-size:16px;margin-right:6px;">📊</span>
+         <span style="font-size:13px;font-weight:600;">天天基金</span>
        </div>
-       <div style="font-size:20px;font-weight:700;margin-bottom:8px;color:#1e40af;">${d.price.toFixed(4)}</div>`;
+       <div style="font-size:28px;font-weight:800;margin-bottom:12px;color:#1e40af;text-shadow:0 2px 4px rgba(30,64,175,0.1);">${d.price.toFixed(4)}</div>`;
      
        if(d.nav) {
        html += `
-       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-         <div style="font-size:16px;font-weight:700;color:${isUp?'#dc2626':'#16a34a'};">
+       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:12px;">
+         <div style="font-size:24px;font-weight:800;color:${isUp?'#dc2626':'#16a34a'};text-shadow:0 2px 4px ${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">
            ${isUp?'+':''}${diff.toFixed(4)}
          </div>
-         <div style="background:${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:16px;font-weight:700;min-width:80px;text-align:center;">
+         <div style="background:${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isUp?'#dc2626':'#16a34a'};padding:8px 16px;border-radius:10px;font-size:24px;font-weight:800;min-width:90px;text-align:center;box-shadow:0 2px 8px ${isUp?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};">
            ${isUp?'+':''}${pct.toFixed(2)}%
          </div>
        </div>`;
@@ -1062,20 +1095,20 @@ function render(c){
      const isEmUp = emDiff >= 0;
      
      html += `
-     <div style="background:linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);border-radius:10px;padding:12px;color:#92400e;box-shadow:0 1px 4px rgba(245,158,11,0.08);">
-       <div style="display:flex;align-items:center;margin-bottom:8px;">
-         <span style="font-size:14px;margin-right:4px;">🏢</span>
-         <span style="font-size:11px;font-weight:600;">东方财富</span>
+     <div style="background:linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);border-radius:10px;padding:16px;color:#92400e;box-shadow:0 4px 12px rgba(245,158,11,0.15);">
+       <div style="display:flex;align-items:center;margin-bottom:12px;">
+         <span style="font-size:16px;margin-right:6px;">🏢</span>
+         <span style="font-size:13px;font-weight:600;">东方财富</span>
        </div>
-       <div style="font-size:20px;font-weight:700;margin-bottom:8px;color:#92400e;">${d.eastMoneyPrice.toFixed(4)}</div>`;
+       <div style="font-size:28px;font-weight:800;margin-bottom:12px;color:#92400e;text-shadow:0 2px 4px rgba(146,64,14,0.1);">${d.eastMoneyPrice.toFixed(4)}</div>`;
      
      if(d.eastMoneyChange) {
        html += `
-       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-         <div style="font-size:16px;font-weight:700;color:${isEmUp?'#dc2626':'#16a34a'};">
+       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;gap:12px;">
+         <div style="font-size:24px;font-weight:800;color:${isEmUp?'#dc2626':'#16a34a'};text-shadow:0 2px 4px ${isEmUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">
            ${isEmUp?'+':''}${emDiff.toFixed(4)}
          </div>
-         <div style="background:${isEmUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isEmUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:16px;font-weight:700;min-width:80px;text-align:center;">
+         <div style="background:${isEmUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isEmUp?'#dc2626':'#16a34a'};padding:8px 16px;border-radius:10px;font-size:24px;font-weight:800;min-width:90px;text-align:center;box-shadow:0 2px 8px ${isEmUp?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};">
            ${isEmUp?'+':''}${emPct.toFixed(2)}%
          </div>
        </div>`;
@@ -1109,23 +1142,23 @@ function render(c){
    const isUp = estimatePct >= 0;
    
    html+=`
-   <div style="background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);border-radius:10px;padding:12px;margin-bottom:12px;color:#166534;box-shadow:0 1px 4px rgba(34,197,94,0.08);">
-     <div style="display:flex;align-items:center;margin-bottom:8px;">
-       <span style="font-size:14px;margin-right:4px;">⚡</span>
-       <span style="font-size:12px;font-weight:600;">天天基金实时估算</span>
+   <div style="background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);border-radius:10px;padding:16px;margin-bottom:12px;color:#166534;box-shadow:0 4px 12px rgba(34,197,94,0.15);">
+     <div style="display:flex;align-items:center;margin-bottom:12px;">
+       <span style="font-size:16px;margin-right:6px;">⚡</span>
+       <span style="font-size:13px;font-weight:600;">天天基金实时估算</span>
      </div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:center;">
-       <div>
-         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">预估净值</div>
-         <div style="font-size:18px;font-weight:700;color:#166534;">${estimatePrice.toFixed(4)}</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;">
+       <div style="background:rgba(255,255,255,0.5);padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(22,101,52,0.08);">
+         <div style="font-size:12px;opacity:0.7;margin-bottom:6px;">预估净值</div>
+         <div style="font-size:26px;font-weight:800;color:#166534;text-shadow:0 2px 4px rgba(22,101,52,0.1);">${estimatePrice.toFixed(4)}</div>
        </div>
-       <div>
-         <div style="font-size:12px;opacity:0.7;margin-bottom:4px;">预估涨跌</div>
-         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-           <span style="font-size:18px;font-weight:700;color:${isUp?'#dc2626':'#16a34a'};min-width:80px;">
+       <div style="background:rgba(255,255,255,0.5);padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(22,101,52,0.08);">
+         <div style="font-size:12px;opacity:0.7;margin-bottom:6px;">预估涨跌</div>
+         <div style="display:flex;flex-direction:column;gap:8px;">
+           <span style="font-size:26px;font-weight:800;color:${isUp?'#dc2626':'#16a34a'};text-shadow:0 2px 4px ${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">
              ${isUp?'+':''}${diff.toFixed(4)}
            </span>
-           <span style="background:${isUp?'#fef2f2':'#f0fdf4'};color:${isUp?'#dc2626':'#16a34a'};padding:6px 12px;border-radius:8px;font-size:18px;font-weight:700;text-align:center;min-width:80px;">
+           <span style="background:${isUp?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};color:${isUp?'#dc2626':'#16a34a'};padding:8px 12px;border-radius:8px;font-size:26px;font-weight:800;text-align:center;box-shadow:0 2px 8px ${isUp?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};">
              ${isUp?'+':''}${estimatePct.toFixed(2)}%
            </span>
          </div>
@@ -1137,9 +1170,10 @@ function render(c){
    if(h.shares > 0){
      const dayPL=diff*h.shares;
      html+=`
-     <div style="background:${dayPL>=0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};border:2px solid ${dayPL>=0?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;padding:16px;margin-bottom:12px;">
-       <div style="font-size:16px;color:${dayPL>=0?'#059669':'#dc2626'};font-weight:700;text-align:center;">
-         当日预估盈亏：${dayPL>=0?'+':''}${dayPL.toFixed(2)} 元
+     <div style="background:${dayPL>=0?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};border:2px solid ${dayPL>=0?'rgba(220,38,38,0.4)':'rgba(22,163,74,0.4)'};border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 4px 12px ${dayPL>=0?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};text-align:center;">
+       <div style="font-size:14px;color:${dayPL>=0?'#7f1d1d':'#14532d'};margin-bottom:8px;font-weight:600;">当日预估盈亏</div>
+       <div style="font-size:32px;color:${dayPL>=0?'#dc2626':'#16a34a'};font-weight:800;letter-spacing:1px;text-shadow:0 2px 4px ${dayPL>=0?'rgba(220,38,38,0.3)':'rgba(22,163,74,0.3)'};">
+         ${dayPL>=0?'+':''}${dayPL.toFixed(2)} 元
        </div>
      </div>`;
    }
@@ -1194,30 +1228,15 @@ function render(c){
      const actualDayPL = actualDiff * h.shares;
      const plTitle = isToday ? '当日实际盈亏' : '实际盈亏';
      html+=`
-     <div style="background:${actualDayPL>=0?'rgba(245,158,11,0.1)':'rgba(239,68,68,0.1)'};border:2px solid ${actualDayPL>=0?'rgba(245,158,11,0.3)':'rgba(239,68,68,0.3)'};border-radius:10px;padding:16px;margin-bottom:12px;">
-       <div style="font-size:16px;color:${actualDayPL>=0?'#d97706':'#dc2626'};font-weight:700;text-align:center;">
-         ${plTitle}：${actualDayPL>=0?'+':''}${actualDayPL.toFixed(2)} 元
+     <div style="background:${actualDayPL>=0?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};border:2px solid ${actualDayPL>=0?'rgba(220,38,38,0.4)':'rgba(22,163,74,0.4)'};border-radius:12px;padding:20px;margin-bottom:12px;box-shadow:0 4px 12px ${actualDayPL>=0?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};text-align:center;">
+       <div style="font-size:14px;color:${actualDayPL>=0?'#7f1d1d':'#14532d'};margin-bottom:8px;font-weight:600;">${plTitle}</div>
+       <div style="font-size:32px;color:${actualDayPL>=0?'#dc2626':'#16a34a'};font-weight:800;letter-spacing:1px;text-shadow:0 2px 4px ${actualDayPL>=0?'rgba(220,38,38,0.3)':'rgba(22,163,74,0.3)'};">
+         ${actualDayPL>=0?'+':''}${actualDayPL.toFixed(2)} 元
        </div>
      </div>`;
    }
  } else if(d.nav) {
-   // 如果没有当日实际净值，显示"尚未更新"提示
-   const today = new Date();
-   const todayStr = today.toISOString().split('T')[0].replace(/-/g,'');
-   
-   html+=`
-   <div style="background:rgba(156,163,175,0.1);border:1px dashed rgba(156,163,175,0.3);border-radius:10px;padding:16px;margin-bottom:12px;text-align:center;">
-     <div style="display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
-       <span style="font-size:14px;margin-right:4px;">⏳</span>
-       <span style="font-size:12px;font-weight:600;">当日净值状态</span>
-     </div>
-     <div style="font-size:14px;color:var(--text-muted);font-weight:600;">
-       📅 当日净值尚未更新
-     </div>
-     <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-       ${d.gszzl !== undefined && d.gszzl !== null ? '当前显示实时估算数据' : '暂无估算数据'}
-     </div>
-   </div>`;
+   // 如果没有当日实际净值，不显示额外提示（已在顶部显示状态）
  }
 
  html += `</div>`; // 结束主卡片
@@ -1231,24 +1250,24 @@ function render(c){
    const isProfit = total >= 0;
    
    html+=`
-   <div style="background:linear-gradient(135deg, ${isProfit?'#f0fdf4':'#fef2f2'} 0%, ${isProfit?'#ecfdf5':'#fee2e2'} 100%);border-radius:12px;padding:14px;margin-bottom:12px;color:${isProfit?'#166534':'#991b1b'};box-shadow:0 1px 4px ${isProfit?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)'};">
-     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+   <div style="background:linear-gradient(135deg, ${isProfit?'#fef2f2':'#f0fdf4'} 0%, ${isProfit?'#fee2e2':'#ecfdf5'} 100%);border-radius:12px;padding:18px;margin-bottom:12px;color:${isProfit?'#7f1d1d':'#14532d'};box-shadow:0 4px 12px ${isProfit?'rgba(220,38,38,0.15)':'rgba(22,163,74,0.15)'};">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
        <div style="display:flex;align-items:center;">
-         <span style="font-size:16px;margin-right:6px;">${isProfit?'📈':'📉'}</span>
-         <span style="font-size:14px;font-weight:600;">持仓收益</span>
+         <span style="font-size:20px;margin-right:8px;">${isProfit?'📈':'📉'}</span>
+         <span style="font-size:16px;font-weight:600;color:${isProfit?'#991b1b':'#166534'};">持仓收益</span>
        </div>
-       <div style="background:${isProfit?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:8px;font-size:9px;">
+       <div style="background:${isProfit?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};padding:4px 10px;border-radius:8px;font-size:11px;font-weight:500;color:${isProfit?'#7f1d1d':'#14532d'};">
          基于${priceSource}
        </div>
      </div>
-     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-       <div>
-         <div style="font-size:13px;opacity:0.7;margin-bottom:4px;">收益金额</div>
-         <div style="font-size:22px;font-weight:700;">${isProfit?'+':''}${total.toFixed(2)}</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+       <div style="text-align:center;padding:12px;background:${isProfit?'rgba(220,38,38,0.12)':'rgba(22,163,74,0.12)'};border-radius:10px;box-shadow:0 2px 6px ${isProfit?'rgba(220,38,38,0.1)':'rgba(22,163,74,0.1)'};">
+         <div style="font-size:13px;opacity:0.8;margin-bottom:6px;font-weight:600;color:${isProfit?'#7f1d1d':'#14532d'};">收益金额</div>
+         <div style="font-size:28px;font-weight:800;letter-spacing:0.5px;color:${isProfit?'#dc2626':'#16a34a'};text-shadow:0 2px 4px ${isProfit?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">${isProfit?'+':''}${total.toFixed(2)}</div>
        </div>
-       <div>
-         <div style="font-size:13px;opacity:0.7;margin-bottom:4px;">收益率</div>
-         <div style="font-size:22px;font-weight:700;">${isProfit?'+':''}${pct.toFixed(2)}%</div>
+       <div style="text-align:center;padding:12px;background:${isProfit?'rgba(220,38,38,0.12)':'rgba(22,163,74,0.12)'};border-radius:10px;box-shadow:0 2px 6px ${isProfit?'rgba(220,38,38,0.1)':'rgba(22,163,74,0.1)'};">
+         <div style="font-size:13px;opacity:0.8;margin-bottom:6px;font-weight:600;color:${isProfit?'#7f1d1d':'#14532d'};">收益率</div>
+         <div style="font-size:28px;font-weight:800;letter-spacing:0.5px;color:${isProfit?'#dc2626':'#16a34a'};text-shadow:0 2px 4px ${isProfit?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'};">${isProfit?'+':''}${pct.toFixed(2)}%</div>
        </div>
      </div>
    </div>`;
@@ -2729,6 +2748,143 @@ function resetChartZoom(){
      drawProfitChart(window.currentHistoryData,h);
    }
  }
+}
+
+/* 计算指定周数的交易日涨跌幅之和（按自然周计算） */
+function calculatePeriodChange(weeks){
+ if(!window.currentHistoryData||!window.currentHistoryCode){
+   alert('请先查看基金历史数据');
+   return;
+ }
+ 
+ const data = window.currentHistoryData;
+ const resultDiv = document.getElementById('periodChangeResult');
+ 
+ // 获取今天的日期
+ const today = new Date();
+ const todayDayOfWeek = today.getDay(); // 0=周日, 1=周一, ..., 6=周六
+ 
+ // 计算本周一的日期
+ const daysFromMonday = todayDayOfWeek === 0 ? 6 : todayDayOfWeek - 1; // 如果是周日，则往前推6天到周一
+ const thisMonday = new Date(today);
+ thisMonday.setDate(today.getDate() - daysFromMonday);
+ thisMonday.setHours(0, 0, 0, 0);
+ 
+ // 计算起始周一的日期
+ const startMonday = new Date(thisMonday);
+ startMonday.setDate(thisMonday.getDate() - (weeks - 1) * 7);
+ 
+ // 计算结束日期（本周五或今天，取较早的）
+ const thisFriday = new Date(thisMonday);
+ thisFriday.setDate(thisMonday.getDate() + 4); // 周一+4天=周五
+ const endDate = today < thisFriday ? today : thisFriday;
+ endDate.setHours(23, 59, 59, 999);
+ 
+ console.log('日期范围计算:', {
+   今天: today.toLocaleDateString('zh-CN'),
+   今天星期: todayDayOfWeek,
+   本周一: thisMonday.toLocaleDateString('zh-CN'),
+   起始周一: startMonday.toLocaleDateString('zh-CN'),
+   结束日期: endDate.toLocaleDateString('zh-CN'),
+   周数: weeks
+ });
+ 
+ // 过滤出指定日期范围内的交易日数据
+ const periodData = data.filter(item => {
+   let timestamp;
+   if(Array.isArray(item)){
+     timestamp = item[0];
+   } else if(typeof item === 'object'){
+     timestamp = item.x || item.date || item.time;
+   }
+   
+   if(!timestamp) return false;
+   
+   const date = new Date(timestamp);
+   const dayOfWeek = date.getDay();
+   
+   // 排除周六(6)和周日(0)，并且在日期范围内
+   return dayOfWeek !== 0 && dayOfWeek !== 6 && 
+          date >= startMonday && date <= endDate;
+ });
+ 
+ if(periodData.length < 2){
+   resultDiv.innerHTML = `⚠️ 交易日数据不足，无法计算${weeks === 1 ? '一周' : '两周'}涨跌幅`;
+   resultDiv.style.display = 'flex';
+   resultDiv.style.color = 'var(--warning-color)';
+   return;
+ }
+ 
+ // 提取净值数据
+ const values = periodData.map(item => {
+   if(Array.isArray(item)) return item[1];
+   return item.y || item.nav || item.value;
+ }).filter(v => typeof v === 'number' && !isNaN(v));
+ 
+ if(values.length < 2){
+   resultDiv.innerHTML = `⚠️ 有效交易日数据不足，无法计算${weeks === 1 ? '一周' : '两周'}涨跌幅`;
+   resultDiv.style.display = 'flex';
+   resultDiv.style.color = 'var(--warning-color)';
+   return;
+ }
+ 
+ // 计算涨跌幅之和
+ let totalChange = 0;
+ let changeCount = 0;
+ 
+ for(let i = 1; i < values.length; i++){
+   const prevNav = values[i-1];
+   const currentNav = values[i];
+   
+   if(prevNav && currentNav && prevNav > 0){
+     const changeRate = ((currentNav - prevNav) / prevNav) * 100;
+     totalChange += changeRate;
+     changeCount++;
+   }
+ }
+ 
+ // 计算期间总涨跌幅（首尾对比）
+ const startNav = values[0];
+ const endNav = values[values.length - 1];
+ const totalChangeRate = ((endNav - startNav) / startNav) * 100;
+ 
+ // 获取实际日期范围
+ const actualStartDate = new Date(periodData[0][0] || periodData[0].x);
+ const actualEndDate = new Date(periodData[periodData.length-1][0] || periodData[periodData.length-1].x);
+ const startDateStr = actualStartDate.toLocaleDateString('zh-CN', {month:'2-digit', day:'2-digit'});
+ const endDateStr = actualEndDate.toLocaleDateString('zh-CN', {month:'2-digit', day:'2-digit'});
+ 
+ // 显示结果
+ const isPositive = totalChange >= 0;
+ const color = isPositive ? 'var(--up-color)' : 'var(--down-color)';
+ const icon = isPositive ? '📈' : '📉';
+ 
+ const periodName = weeks === 1 ? '本周' : '近两周';
+ 
+ resultDiv.innerHTML = `
+   ${icon} <strong>${periodName}(${values.length}个交易日)涨跌幅之和：</strong>
+   <span style="color:${color};margin-left:8px;font-size:15px;">
+     ${isPositive?'+':''}${totalChange.toFixed(2)}%
+   </span>
+   <span style="margin-left:12px;opacity:0.7;font-size:12px;">
+     (期间总涨跌：${isPositive?'+':''}${totalChangeRate.toFixed(2)}% | ${startDateStr}~${endDateStr})
+   </span>
+ `;
+ resultDiv.style.display = 'flex';
+ resultDiv.style.color = 'var(--text-primary)';
+ 
+ console.log(`${periodName}(${values.length}个交易日)涨跌幅统计:`, {
+   涨跌幅之和: totalChange.toFixed(2) + '%',
+   期间总涨跌: totalChangeRate.toFixed(2) + '%',
+   统计交易日: changeCount,
+   实际数据天数: values.length,
+   起始净值: startNav.toFixed(4),
+   结束净值: endNav.toFixed(4),
+   日期范围: `${startDateStr}~${endDateStr}`,
+   计算周数: weeks,
+   起始周一: startMonday.toLocaleDateString('zh-CN'),
+   结束日期: endDate.toLocaleDateString('zh-CN')
+ });
 }
 
 /* 定投分析功能 */
